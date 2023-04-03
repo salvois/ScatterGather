@@ -27,7 +27,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Amazon.DynamoDBv2;
@@ -48,7 +47,15 @@ public class ScatterGatherGateway : IScatterGatherGateway
             ["RequestId"] = new AttributeValue { S = requestId.Value }
         };
 
-    private static Dictionary<string, AttributeValue> PartKey(ScatterRequestId requestId, ScatterPartId partId) =>
+    private static Dictionary<string, AttributeValue> RequestItem(ScatterRequestId requestId, DateTime creationTime, string info) =>
+        new()
+        {
+            ["RequestId"] = new AttributeValue { S = requestId.Value },
+            ["CreationTime"] = new AttributeValue { S = creationTime.ToString("O") },
+            ["Info"] = new AttributeValue { S = info }
+        };
+
+    private static Dictionary<string, AttributeValue> PartItem(ScatterRequestId requestId, ScatterPartId partId) =>
         new()
         {
             ["RequestId"] = new AttributeValue { S = requestId.Value },
@@ -72,23 +79,18 @@ public class ScatterGatherGateway : IScatterGatherGateway
     public async Task BeginScatter(ScatterRequestId requestId, string info)
     {
         await Cleanup(requestId);
-        await _dynamoDbClient.PutItemAsync(_requestTableName, new Dictionary<string, AttributeValue>
-        {
-            ["RequestId"] = new() { S = requestId.Value },
-            ["CreationTime"] = new() { S = DateTime.UtcNow.ToString("O") },
-            ["Info"] = new() { S = info }
-        });
+        await _dynamoDbClient.PutItemAsync(_requestTableName, RequestItem(requestId, DateTime.UtcNow, info));
     }
 
+    public async Task Scatter(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task> callback)
+    {
+        await PutParts(requestId, partIds);
+        await callback();
+    }
+    
     public async Task<T> Scatter<T>(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task<T>> callback)
     {
-        foreach (var partIdChunk in partIds.Chunk(MaxBatchSize))
-            await _dynamoDbClient.BatchWriteItemAsync(new BatchWriteItemRequest(new Dictionary<string, List<WriteRequest>>
-            {
-                [_partTableName] = partIdChunk
-                    .Select(partId => new WriteRequest(new PutRequest(PartKey(requestId, partId))))
-                    .ToList()
-            }));
+        await PutParts(requestId, partIds);
         return await callback();
     }
 
@@ -103,7 +105,7 @@ public class ScatterGatherGateway : IScatterGatherGateway
                 ["ScatterCompleted"] = new(new AttributeValue { BOOL = true }, AttributeAction.PUT)
             }
         });
-        if (await ShouldHandleCompletion(requestId, $"{nameof(EndScatter)}-{requestId.Value}"))
+        if (await ShouldHandleCompletion(requestId, lockerId: $"{nameof(EndScatter)}-{requestId.Value}"))
         {
             await handleCompletion();
             await Cleanup(requestId);
@@ -112,15 +114,8 @@ public class ScatterGatherGateway : IScatterGatherGateway
 
     public async Task Gather(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<Task> handleCompletion)
     {
-        foreach (var partIdChunk in partIds.Chunk(MaxBatchSize))
-            await _dynamoDbClient.BatchWriteItemAsync(new BatchWriteItemRequest(new Dictionary<string, List<WriteRequest>>
-            {
-                [_partTableName] = partIdChunk
-                    .Select(partId => new WriteRequest(new DeleteRequest(PartKey(requestId, partId))))
-                    .ToList()
-            }));
-        var shouldHandleCompletion = await ShouldHandleCompletion(requestId, $"{nameof(Gather)}-{partIds.First().Value}");
-        if (shouldHandleCompletion)
+        await DeleteParts(requestId, partIds);
+        if (await ShouldHandleCompletion(requestId, lockerId: $"{nameof(Gather)}-{partIds.First().Value}"))
         {
             await handleCompletion();
             await Cleanup(requestId);
@@ -132,18 +127,8 @@ public class ScatterGatherGateway : IScatterGatherGateway
 
     private async Task<bool> StillHasParts(ScatterRequestId requestId)
     {
-        var queryResponse = await _dynamoDbClient.QueryAsync(new QueryRequest
-        {
-            TableName = _partTableName,
-            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
-            {
-                [":RequestId"] = new() { S = requestId.Value }
-            },
-            KeyConditionExpression = "RequestId = :RequestId",
-            ConsistentRead = true,
-            Limit = 1
-        });
-        return queryResponse.Count != 0;
+        var partIds = await QueryPartsByRequestId(requestId, firstOnly: true);
+        return partIds.Count != 0;
     }
 
     private async Task<bool> TryLockRequest(ScatterRequestId requestId, string lockerId)
@@ -174,26 +159,51 @@ public class ScatterGatherGateway : IScatterGatherGateway
     {
         while (true)
         {
-            var queryResponse = await _dynamoDbClient.QueryAsync(new QueryRequest
-            {
-                TableName = _partTableName,
-                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
-                {
-                    [":RequestId"] = new() { S = requestId.Value }
-                },
-                KeyConditionExpression = "RequestId = :RequestId",
-                ConsistentRead = true
-            });
-            if (queryResponse.Count == 0)
+            var partIds = await QueryPartsByRequestId(requestId, firstOnly: false);
+            if (partIds.Count == 0)
                 break;
-            foreach (var itemChunk in queryResponse.Items.Chunk(MaxBatchSize))
-                await _dynamoDbClient.BatchWriteItemAsync(new BatchWriteItemRequest(new Dictionary<string, List<WriteRequest>>
-                {
-                    [_partTableName] = itemChunk
-                        .Select(part => new WriteRequest(new DeleteRequest(PartKey(requestId, new ScatterPartId(part["PartId"].S)))))
-                        .ToList()
-                }));
+            await DeleteParts(requestId, partIds);
         }
         await _dynamoDbClient.DeleteItemAsync(_requestTableName, RequestKey(requestId));
+    }
+
+    private async Task<IReadOnlyCollection<ScatterPartId>> QueryPartsByRequestId(ScatterRequestId requestId, bool firstOnly)
+    {
+        var queryRequest = new QueryRequest
+        {
+            TableName = _partTableName,
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":RequestId"] = new() { S = requestId.Value }
+            },
+            KeyConditionExpression = "RequestId = :RequestId",
+            ConsistentRead = true
+        };
+        if (firstOnly)
+            queryRequest.Limit = 1;
+        var queryResponse = await _dynamoDbClient.QueryAsync(queryRequest);
+        return queryResponse.Items.Select(item => new ScatterPartId(item["PartId"].S)).ToList();
+    }
+
+    private async Task PutParts(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds)
+    {
+        foreach (var partIdChunk in partIds.Chunk(MaxBatchSize))
+            await _dynamoDbClient.BatchWriteItemAsync(new BatchWriteItemRequest(new Dictionary<string, List<WriteRequest>>
+            {
+                [_partTableName] = partIdChunk
+                    .Select(partId => new WriteRequest(new PutRequest(PartItem(requestId, partId))))
+                    .ToList()
+            }));
+    }
+
+    private async Task DeleteParts(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds)
+    {
+        foreach (var partIdChunk in partIds.Chunk(MaxBatchSize))
+            await _dynamoDbClient.BatchWriteItemAsync(new BatchWriteItemRequest(new Dictionary<string, List<WriteRequest>>
+            {
+                [_partTableName] = partIdChunk
+                    .Select(partId => new WriteRequest(new DeleteRequest(PartItem(requestId, partId))))
+                    .ToList()
+            }));
     }
 }

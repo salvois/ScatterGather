@@ -18,15 +18,17 @@ With the `ScatterGatherGateway` provided by this libary, when the worker perform
 
 ## Comparison with AWS Step Functions
 
-The scatter-gather pattern may be implemented on AWS using the [Map state](https://docs.aws.amazon.com/step-functions/latest/dg/amazon-states-language-map-state.html) of Step functions. Using Map, you can split an operation across multiple workers, for example using a file in an S3 bucket to list the parts, then Step function will wait synchronously for each worker to complete before moving forward.
+The scatter-gather pattern may be implemented on AWS using the [Map state](https://docs.aws.amazon.com/step-functions/latest/dg/amazon-states-language-map-state.html) of Step functions. Using Map, you can split an operation across multiple workers. If you need to process a large number of sub-operations, you can run a so-called Distributed Map state, which takes its input from a file saved in an S3 bucket, containing the list the parts to scatter.
 
-You might want to use the `ScatterGatherGateway` provided by this library in the following cases:
+The Map state of Step functions will wait for all workers to complete before moving forward. In case of errors, the Map state will produce reports containing the failed or pending parts (saving them into an S3 bucket, in case of a Distributed Map state), which you can use to fabricate a new input to resume the failed state machine.
+
+As an alternative, you might want to use the `ScatterGatherGateway` provided by this library in the following cases:
 
 - you want to decouple the scattering component and workers using a message queue, so that processing is asynchronous
 - in case of errors, you want to take advantage of dead-letter queues so that you can restart a failing scatter-gather operation for the failed parts, using the same mechanics of non-scatter-gather operations
 - you want more control over the progress state of the scatter-gather operation
-- you don't want to create a JSON or CSV file on Amazon S3 to list the parts for a Distributed Map state
-- you don't want to parse the result files saved by the Distributed Map state to know which parts failed and which parts did not even start
+- you don't want to create a file on S3 to list the scattered parts for a Distributed Map state
+- you don't want to parse the result files saved by the Distributed Map state to S3 to know which parts failed and which parts did not even start
 
 ## Usage
 
@@ -67,6 +69,7 @@ await scatterGatherGateway.BeginScatter(scatterRequestId, "This is a custom text
 // This may be called multiple times, for example because scatter parts are discovered while streaming an external resource.
 await scatterGatherGateway.Scatter(scatterRequestId, scatterPartIds, () =>
 {
+    // In this callback you typically send a message to a worker through a message queue.
     Console.WriteLine($"Scattered {scatterPartIds.Count} parts.");
     return Task.FromResult(0);
 });
@@ -96,6 +99,10 @@ static Task HandleCompletion()
 ## Testing locally
 
 Automated tests are run against a container created from the [DynamoDB-local Docker image](https://hub.docker.com/r/amazon/dynamodb-local/). A docker-compose file is provided so that you can run `docker-compose up` to run the DynamoDB container before running tests. The DynamoDB container will be mapped on TCP port 8998 on the host.
+
+## Special thanks
+
+Thanks to [Matteo Pierangeli](https://github.com/matpierangeli) for his code review and comments!
 
 ## License
 

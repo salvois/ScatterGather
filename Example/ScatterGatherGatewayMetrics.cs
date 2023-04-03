@@ -55,6 +55,15 @@ public class ScatterGatherGatewayMetrics : IScatterGatherGateway
         Console.WriteLine($"{nameof(BeginScatter)} #{_beginScatterCount} executed in {stopwatch.Elapsed.TotalMilliseconds} ms.");
     }
 
+    public async Task Scatter(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task> callback)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        await _decoratee.Scatter(requestId, partIds, callback);
+        stopwatch.Stop();
+        _scatterCount++;
+        Console.WriteLine($"{nameof(Scatter)} #{_scatterCount} executed in {stopwatch.Elapsed.TotalMilliseconds} ms.");
+    }
+
     public async Task<T> Scatter<T>(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task<T>> callback)
     {
         var stopwatch = Stopwatch.StartNew();

@@ -52,6 +52,7 @@ await scatterGatherGateway.BeginScatter(scatterRequestId, "This is a custom text
 // This may be called multiple times, for example because scatter parts are discovered while streaming an external resource
 await scatterGatherGateway.Scatter(scatterRequestId, scatterPartIds, () =>
 {
+    // In this callback you typically send a message to a worker through a message queue.
     Console.WriteLine($"Scattered {scatterPartIds.Count} parts.");
     return Task.FromResult(0);
 });

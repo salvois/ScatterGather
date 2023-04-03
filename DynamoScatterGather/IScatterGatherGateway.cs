@@ -38,6 +38,7 @@ public readonly record struct ScatterPartId(string Value);
 public interface IScatterGatherGateway
 {
     Task BeginScatter(ScatterRequestId requestId, string info);
+    Task Scatter(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task> callback);
     Task<T> Scatter<T>(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task<T>> callback);
     Task EndScatter(ScatterRequestId requestId, Func<Task> handleCompletion);
     Task Gather(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<Task> handleCompletion);
