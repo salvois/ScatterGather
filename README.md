@@ -34,9 +34,15 @@ As an alternative, you might want to use the `ScatterGatherGateway` provided by 
 
 The `ScatterGatherGateway` class implements a [gateway](https://martinfowler.com/articles/gateway-pattern.html) to DynamoDB to manage state of a scatter-gather operation.
 
-Typically, the scattering component creates a unique `ScatterRequestId` and executes a `BeginScatter`, `Scatter`, `EndScatter` sequence, maybe calling `Scatter` multiple times to add more parts to the scatter-gather operation (that is, `ScatterGatherGateway` is "stream friendly"). `Scatter` accepts a callback function to execute on the scattered part, for example to send a message to a worker. Each scattered part must be identified by a `ScatterPartId` that must be unique in that scatter-gather operation.
+Typically, the scattering component creates a unique `ScatterRequestId` and executes a `BeginScatter`/`Scatter`/`EndScatter` sequence, maybe calling `Scatter` multiple times to add more parts to the scatter-gather operation (that is, `ScatterGatherGateway` is "stream friendly").
 
-Workers typically call `Gather` after processing its part (after is important for idempotency), to mark that part as complete, passing a callback function that will be executed if the `ScatterGatherGateway` notices that that was the last part to be gathered.
+`BeginScatter` initializes a new scatter-gather request, identified by a unique `ScatterRequestId`, and accepts an arbitrary context string that is associated with that request. This context string can contain any text meaningful to the application, perhaps even some JSON-encoded data, and it will be passed to the completion handler function. The size of the context string is limited by the size of a DynamoDB item, that is less than 400 kB including other request fields.
+
+`Scatter` accepts a callback function to execute on the scattered part, for example to send a message to a worker. Each scattered part must be identified by a `ScatterPartId` that must be unique in that scatter-gather operation.
+
+`EndScatter` signals that all parts have been scattered, thus it is now possible to expect completion of the whole scatter-gather operation. The `EndScatter` calls the completion handler function in case all parts, if any, have been gathered so fast that the scatter-gather operation is already completed.
+
+A worker typically call `Gather` after processing its part (after is important for idempotency), to mark that part as complete, passing a completion handler function that will be executed if the `ScatterGatherGateway` notices that that was the last part to be gathered.
 
 Note that you must first create two tables on DynamoDB:
 
@@ -45,7 +51,7 @@ Note that you must first create two tables on DynamoDB:
 
 Performance-wise, all methods of `ScatterGatherGateway` run time is proportional to the number of elements passed to that method, but irrespective of the number of elements in the whole scatter-gather operation.
 
-Finally, note that only one worker will be able to call the completion callback, because the `ScatterGatherGateway` will protect treat it as a critical section. Also note that, in case of errors during the completion callback, restarting the worker that was processing the last `Gather` will restart the completion callback (that is, the critical section is re-entrant).
+Finally, note that only one worker will be able to call the completion handler function, because the `ScatterGatherGateway` will protect treat it as a critical section. Also note that, in case of errors during the completion handler function, restarting the worker that was processing the last `Gather` will restart the completion handler function (that is, the critical section is re-entrant).
 
 Here is a complete example:
 
@@ -63,7 +69,7 @@ var scatterRequestId = new ScatterRequestId("42");
 var scatterPartIds = Enumerable.Range(0, 100).Select(i => new ScatterPartId(i.ToString())).ToList();
 
 // BeginScatter initializes the state for a new scatter-gather request
-await scatterGatherGateway.BeginScatter(scatterRequestId, "This is a custom text to identify this request, for debugging or troubleshooting");
+await scatterGatherGateway.BeginScatter(scatterRequestId, "This is a custom text associated with this request");
 
 // Sub-operations, that is scattered parts, can be added to the scatter-gather operation using Scatter.
 // This may be called multiple times, for example because scatter parts are discovered while streaming an external resource.
@@ -89,9 +95,9 @@ foreach (var scatterPartId in scatterPartIds)
 
 // The completion function that will be called once all scattered parts have been gathered.
 // This allows executing some action after the whole scatter-gather operation is completed.
-static Task HandleCompletion()
+static Task HandleCompletion(string context)
 {
-    Console.WriteLine("All parts have been gathered.");
+    Console.WriteLine($"All parts have been gathered for context: {context}");
     return Task.CompletedTask;
 }
 ```

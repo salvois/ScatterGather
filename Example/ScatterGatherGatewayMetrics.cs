@@ -74,7 +74,7 @@ public class ScatterGatherGatewayMetrics : IScatterGatherGateway
         return result;
     }
 
-    public async Task EndScatter(ScatterRequestId requestId, Func<Task> handleCompletion)
+    public async Task EndScatter(ScatterRequestId requestId, Func<string, Task> handleCompletion)
     {
         var stopwatch = Stopwatch.StartNew();
         await _decoratee.EndScatter(requestId, handleCompletion);
@@ -83,7 +83,7 @@ public class ScatterGatherGatewayMetrics : IScatterGatherGateway
         Console.WriteLine($"{nameof(EndScatter)} #{_endScatterCount} executed in {stopwatch.Elapsed.TotalMilliseconds} ms.");
     }
 
-    public async Task Gather(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<Task> handleCompletion)
+    public async Task Gather(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<string, Task> handleCompletion)
     {
         var stopwatch = Stopwatch.StartNew();
         await _decoratee.Gather(requestId, partIds, handleCompletion);

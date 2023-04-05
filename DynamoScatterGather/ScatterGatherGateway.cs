@@ -47,12 +47,12 @@ public class ScatterGatherGateway : IScatterGatherGateway
             ["RequestId"] = new AttributeValue { S = requestId.Value }
         };
 
-    private static Dictionary<string, AttributeValue> RequestItem(ScatterRequestId requestId, DateTime creationTime, string info) =>
+    private static Dictionary<string, AttributeValue> RequestItem(ScatterRequestId requestId, DateTime creationTime, string context) =>
         new()
         {
             ["RequestId"] = new AttributeValue { S = requestId.Value },
             ["CreationTime"] = new AttributeValue { S = creationTime.ToString("O") },
-            ["Info"] = new AttributeValue { S = info }
+            ["Context"] = new AttributeValue { S = context }
         };
 
     private static Dictionary<string, AttributeValue> PartItem(ScatterRequestId requestId, ScatterPartId partId) =>
@@ -87,14 +87,14 @@ public class ScatterGatherGateway : IScatterGatherGateway
         await PutParts(requestId, partIds);
         await callback();
     }
-    
+
     public async Task<T> Scatter<T>(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task<T>> callback)
     {
         await PutParts(requestId, partIds);
         return await callback();
     }
 
-    public async Task EndScatter(ScatterRequestId requestId, Func<Task> handleCompletion)
+    public async Task EndScatter(ScatterRequestId requestId, Func<string, Task> handleCompletion)
     {
         await _dynamoDbClient.UpdateItemAsync(new UpdateItemRequest
         {
@@ -105,37 +105,40 @@ public class ScatterGatherGateway : IScatterGatherGateway
                 ["ScatterCompleted"] = new(new AttributeValue { BOOL = true }, AttributeAction.PUT)
             }
         });
-        if (await ShouldHandleCompletion(requestId, lockerId: $"{nameof(EndScatter)}-{requestId.Value}"))
-        {
-            await handleCompletion();
-            await Cleanup(requestId);
-        }
+        await TryHandleCompletion(requestId, lockerId: $"{nameof(EndScatter)}-{requestId.Value}", handleCompletion);
     }
 
-    public async Task Gather(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<Task> handleCompletion)
+    public async Task Gather(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<string, Task> handleCompletion)
     {
         await DeleteParts(requestId, partIds);
-        if (await ShouldHandleCompletion(requestId, lockerId: $"{nameof(Gather)}-{partIds.First().Value}"))
-        {
-            await handleCompletion();
-            await Cleanup(requestId);
-        }
+        await TryHandleCompletion(requestId, lockerId: $"{nameof(Gather)}-{partIds.First().Value}", handleCompletion);
     }
 
-    private async Task<bool> ShouldHandleCompletion(ScatterRequestId requestId, string lockerId) =>
-        !await StillHasParts(requestId) && await TryLockRequest(requestId, lockerId);
+    private async Task TryHandleCompletion(ScatterRequestId requestId, string lockerId, Func<string, Task> handleCompletion)
+    {
+        var completion = await CheckForCompletion(requestId, lockerId);
+        await completion.Match(
+            onCompleted: async context =>
+            {
+                await handleCompletion(context);
+                await Cleanup(requestId);
+            },
+            onNotCompleted: () => Task.CompletedTask);
+    }
 
-    private async Task<bool> StillHasParts(ScatterRequestId requestId)
+    private async Task<Completion> CheckForCompletion(ScatterRequestId requestId, string lockerId)
     {
         var partIds = await QueryPartsByRequestId(requestId, firstOnly: true);
-        return partIds.Count != 0;
+        if (partIds.Count != 0)
+            return Completion.CreateNotCompleted();
+        return await TryLockRequest(requestId, lockerId);
     }
 
-    private async Task<bool> TryLockRequest(ScatterRequestId requestId, string lockerId)
+    private async Task<Completion> TryLockRequest(ScatterRequestId requestId, string lockerId)
     {
         try
         {
-            await _dynamoDbClient.UpdateItemAsync(new UpdateItemRequest
+            var updateItemResponse = await _dynamoDbClient.UpdateItemAsync(new UpdateItemRequest
             {
                 TableName = _requestTableName,
                 Key = RequestKey(requestId),
@@ -146,12 +149,13 @@ public class ScatterGatherGateway : IScatterGatherGateway
                 },
                 UpdateExpression = "SET LockerId = :LockerId",
                 ConditionExpression = "ScatterCompleted = :ScatterCompleted AND (attribute_not_exists (LockerId) OR LockerId = :LockerId)",
+                ReturnValues = ReturnValue.ALL_NEW
             });
-            return true;
+            return Completion.CreateCompleted(updateItemResponse.Attributes["Context"].S);
         }
         catch (ConditionalCheckFailedException)
         {
-            return false;
+            return Completion.CreateNotCompleted();
         }
     }
 
@@ -205,5 +209,17 @@ public class ScatterGatherGateway : IScatterGatherGateway
                     .Select(partId => new WriteRequest(new DeleteRequest(PartItem(requestId, partId))))
                     .ToList()
             }));
+    }
+
+    private readonly record struct Completion(bool Completed, string Context)
+    {
+        public static Completion CreateCompleted(string context) => new(true, context);
+        public static Completion CreateNotCompleted() => new(false, "");
+        public T Match<T>(Func<string, T> onCompleted, Func<T> onNotCompleted) =>
+            this switch
+            {
+                { Completed: true, Context: var c } => onCompleted(c),
+                { Completed: false } => onNotCompleted()
+            };
     }
 }

@@ -46,7 +46,7 @@ var scatterRequestId = new ScatterRequestId("42");
 var scatterPartIds = Enumerable.Range(0, 100).Select(i => new ScatterPartId(i.ToString())).ToList();
 
 // BeginScatter initializes the state for a new scatter-gather request
-await scatterGatherGateway.BeginScatter(scatterRequestId, "This is a custom text to identify this request, for debugging or troubleshooting");
+await scatterGatherGateway.BeginScatter(scatterRequestId, "This is a custom text associated with this request");
 
 // Sub-operations, that is scattered parts, can be added to the scatter-gather operation using Scatter.
 // This may be called multiple times, for example because scatter parts are discovered while streaming an external resource
@@ -72,8 +72,8 @@ foreach (var scatterPartId in scatterPartIds)
 
 // The completion function that will be called once all scattered parts have been gathered.
 // This allows executing some action after the whole scatter-gather operation is completed.
-static Task HandleCompletion()
+static Task HandleCompletion(string context)
 {
-    Console.WriteLine("All parts have been gathered.");
+    Console.WriteLine($"All parts have been gathered for context: {context}");
     return Task.CompletedTask;
 }
