@@ -26,9 +26,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
-using Amazon.DynamoDBv2.Model;
 using Amazon.DynamoDBv2;
 using FluentAssertions;
 using NUnit.Framework;
@@ -42,35 +40,16 @@ public static class ScatterGatherGatewayTest
     private const string RequestTableName = "ScatterRequests";
     private const string PartTableName = "ScatterParts";
 
-    private static Task<int> DoNothingCallback() =>
-        Task.FromResult(0);
-
-    private static AmazonDynamoDBClient CreateDynamoDbClient() =>
-        new(new AmazonDynamoDBConfig { ServiceURL = DynamoDbServiceUrl });
+    private static Task DoNothingCallback() =>
+        Task.CompletedTask;
 
     private static IScatterGatherGateway CreateScatterGatherGateway() =>
         new ScatterGatherGateway(DynamoDbServiceUrl, RequestTableName, PartTableName);
 
-    [OneTimeSetUp]
-    public static async Task OneTimeSetUp()
-    {
-        var client = CreateDynamoDbClient();
-        await client.CreateTableAsync(
-            tableName: RequestTableName,
-            keySchema: new List<KeySchemaElement> { new("RequestId", KeyType.HASH) },
-            attributeDefinitions: new List<AttributeDefinition> { new("RequestId", ScalarAttributeType.S) },
-            provisionedThroughput: new ProvisionedThroughput(1L, 1L));
-        await client.CreateTableAsync(
-            tableName: PartTableName,
-            keySchema: new List<KeySchemaElement> { new("RequestId", KeyType.HASH), new("PartId", KeyType.RANGE) },
-            attributeDefinitions: new List<AttributeDefinition> { new("RequestId", ScalarAttributeType.S), new("PartId", ScalarAttributeType.S) },
-            provisionedThroughput: new ProvisionedThroughput(1L, 1L));
-    }
-
     [OneTimeTearDown]
     public static async Task OneTimeTearDown()
     {
-        var client = CreateDynamoDbClient();
+        var client = new AmazonDynamoDBClient(new AmazonDynamoDBConfig { ServiceURL = DynamoDbServiceUrl });
         await client.DeleteTableAsync(PartTableName);
         await client.DeleteTableAsync(RequestTableName);
     }

@@ -4,7 +4,7 @@
 
 [Scatter-gather](https://www.enterpriseintegrationpatterns.com/patterns/messaging/BroadcastAggregate.html) is an enteprise integration pattern where a single big operation is split into a number of sub-operations, usually performed by separate workers, then some other operation must be carried on after all sub-operations have finished.
 
-This library provides means to keep track of how many scattered sub-operations have been completed, that is gathered, using Amazon DynamoDB to store that state.
+This library provides means to keep track of how many scattered sub-operations have been completed, that is gathered, using Amazon DynamoDB to store that state and a [gateway](https://martinfowler.com/articles/gateway-pattern.html) to manage it.
 
 ## Use case
 
@@ -14,7 +14,7 @@ Once a worker completes processing of a part, it may send a message back to the 
 
 The first component performs a *scatter* of the large operation, while each worker perform a *gather*.
 
-With the `ScatterGatherGateway` provided by this libary, when the worker performs a *gather*, and the `ScatterGatherGateway` notices it was the last part left, it calls a callback function in the context of that worker, and only that worker.
+When a worker performs a *gather*, and the scatter-gather gateway provided by this libary notices it was the last part left, it calls a callback function in the context of that worker, and only that worker.
 
 ## Comparison with AWS Step Functions
 
@@ -22,7 +22,7 @@ The scatter-gather pattern may be implemented on AWS using the [Map state](https
 
 The Map state of Step functions will wait for all workers to complete before moving forward. In case of errors, the Map state will produce reports containing the failed or pending parts (saving them into an S3 bucket, in case of a Distributed Map state), which you can use to fabricate a new input to resume the failed state machine.
 
-As an alternative, you might want to use the `ScatterGatherGateway` provided by this library in the following cases:
+As an alternative, you might want to use the scatter-gather gateway provided by this library in the following cases:
 
 - you want to decouple the scattering component and workers using a message queue, so that processing is asynchronous
 - in case of errors, you want to take advantage of dead-letter queues so that you can restart a failing scatter-gather operation for the failed parts, using the same mechanics of non-scatter-gather operations
@@ -30,30 +30,69 @@ As an alternative, you might want to use the `ScatterGatherGateway` provided by 
 - you don't want to create a file on S3 to list the scattered parts for a Distributed Map state
 - you don't want to parse the result files saved by the Distributed Map state to S3 to know which parts failed and which parts did not even start
 
+## Scatter-gather state storage
+
+The scatter-gather gateway needs a pair of master-detail DynamoDB tables to keep its state: one to store current scatter requests and one to list scattered parts.
+
+The scatter-gather gateway will try to create those tables if they don't already exist, otherwise it will use the ones already present. Considering the typical usage patter of the scatter-gather gateway, the tables are created with a "pay per request" billing mode.
+
+If you want more control over the billing mode and provisioned capacity, you can create the pair of tables manually, as follows:
+
+- a table for scatter requests, that will contain an item for each scatter request that has been created, having a simple primary key composed of a `RequestId` string field as the partition key
+- a table for scattered parts, that will contain an item for each scattered sub-operation of a scatter request, having a composite primary key composed of a `RequestId` string field as the partition key and a `PartId` string field as the sort key
+
+Note that your application will need the following permissions on those two tables: `dynamodb:CreateTable`, `dynamodb:DescribeTable`, `dynamodb:Query`, `dynamodb:PutItem`, `dynamodb:DeleteItem`, `dynamodb:UpdateItem` and `dynamodb:BatchWriteItem`.
+
+For billing, given a scatter-gather operation consisting of *N* scattered parts, account for about 4 write request units for the request table, and about 2*N* write request units and *N* read request units for the part table. This is for normal operation with no errors and restarts involved.
+
 ## Usage
 
-The `ScatterGatherGateway` class implements a [gateway](https://martinfowler.com/articles/gateway-pattern.html) to DynamoDB to manage state of a scatter-gather operation.
+The `ScatterGatherGateway` implements the scatter-gather gateway. The `IScatterGatherGateway` interface is provided in case you want to [decorate](https://en.wikipedia.org/wiki/Decorator_pattern) the scatter-gather gateway.
 
-Typically, the scattering component creates a unique `ScatterRequestId` and executes a `BeginScatter`/`Scatter`/`EndScatter` sequence, maybe calling `Scatter` multiple times to add more parts to the scatter-gather operation (that is, `ScatterGatherGateway` is "stream friendly").
+Each scatter-gather request must be identified by a unique `ScatterRequestId` generated by the application. Each scattered part must be identified by a `ScatterPartId` that must be unique in that scatter-gather operation.
 
-`BeginScatter` initializes a new scatter-gather request, identified by a unique `ScatterRequestId`, and accepts an arbitrary context string that is associated with that request. This context string can contain any text meaningful to the application, perhaps even some JSON-encoded data, and it will be passed to the completion handler function. The size of the context string is limited by the size of a DynamoDB item, that is less than 400 kB including other request fields.
+Both the scattering component and gathering workers must create a `ScatterGatherGateway` using one of the provided constructors.
 
-`Scatter` accepts a callback function to execute on the scattered part, for example to send a message to a worker. Each scattered part must be identified by a `ScatterPartId` that must be unique in that scatter-gather operation.
+Typically, the scattering component creates a unique `ScatterRequestId` and executes a `BeginScatter`, `Scatter`, `EndScatter` sequence, maybe calling `Scatter` multiple times to add more parts to the scatter-gather operation (that is, `ScatterGatherGateway` is "stream friendly"). Each worker calls `Gather` to mark each part as completed.
+
+Performance-wise, the run time of all methods of `ScatterGatherGateway` is proportional to the number of elements passed to that method, but is irrespective of the number of elements in the whole scatter-gather operation.
+
+### Constructors
+
+```csharp
+ScatterGatherGateway(string requestTableName, string partTableName);
+ScatterGatherGateway(string dynamoDbServiceUrlOption, string requestTableName, string partTableName);
+```
+
+Pass either constructor the names for the request table and the part table, which may either be already existing or not. The second constructor allows you to pass a custom URL for the DynamoDB service, useful when you want to use, for example, a local DynamoDB for development and testing.
+
+### Scattering methods
+
+```csharp
+Task    BeginScatter(ScatterRequestId requestId, string context);
+Task    Scatter     (ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task> callback);
+Task<T> Scatter<T>  (ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task<T>> callback);
+Task    EndScatter  (ScatterRequestId requestId, Func<string, Task> handleCompletion);
+```
+
+`BeginScatter` initializes a new scatter-gather request identified by `requestId` and accepts an arbitrary `context` string that is associated with that request. This context string can contain any text meaningful to the application, perhaps even some JSON-encoded data, and it will be passed to the completion handler function. The size of the context string is limited by the size of a DynamoDB item, that is less than 400 kB including other request fields.
+
+`Scatter` tells the scatter-gather gateway that there are one or more new parts that are about to be scattered for the request identified by `requestId`. Part identifiers are listed in `partIds`. The `callback` function must be specified to execute specific action on each scattered part, for example to send a message to a worker.
+`Scatter` has two overloads: one accepting a callback function returning a `Task<T>`, where the resulting `T` is returned by `Scatter` itself, or one returning a `Task`, where `Scatter` itself returns nothing.
 
 `EndScatter` signals that all parts have been scattered, thus it is now possible to expect completion of the whole scatter-gather operation. The `EndScatter` calls the completion handler function in case all parts, if any, have been gathered so fast that the scatter-gather operation is already completed.
 
-A worker typically call `Gather` after processing its part (after is important for idempotency), to mark that part as complete, passing a completion handler function that will be executed if the `ScatterGatherGateway` notices that that was the last part to be gathered.
+### Gathering methods
 
-Note that you must first create two tables on DynamoDB:
+```csharp
+Task Gather(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<string, Task> handleCompletion)
+```
 
-- a table for scatter requests, that will contain an item for each `ScatterRequestId` that has been created, having a simple primary key composed of a `RequestId` string field as the partition key
-- a table for scattered parts, that will contain an item for each `(ScatterRequestId, ScatterPartId)` pair, that is each scattered sub-operation of an operation, having a composite primary key composed of a `RequestId` string field as the partition key and a `PartId` string field as the sort key
+A worker calls `Gather` after processing its parts (after is important for idempotency), to mark those parts as complete. The gathered parts (maybe just one) are identified by `partIds` within `requestId`. The `handleCompletion` function will be executed if the scatter-gather notices that that was the last part to be gathered.
 
-Performance-wise, all methods of `ScatterGatherGateway` run time is proportional to the number of elements passed to that method, but irrespective of the number of elements in the whole scatter-gather operation.
+Note that only one worker will be able to call the completion handler function, because the scatter-gather gateway will treat it as a critical section. Also note that, in case of errors during the completion handler function, restarting the worker that was processing the last `Gather` will restart the completion handler function (that is, the critical section is re-entrant).
 
-Finally, note that only one worker will be able to call the completion handler function, because the `ScatterGatherGateway` will protect treat it as a critical section. Also note that, in case of errors during the completion handler function, restarting the worker that was processing the last `Gather` will restart the completion handler function (that is, the critical section is re-entrant).
-
-Here is a complete example:
+### Example
 
 ```csharp
 // This example uses two DynamoDB tables that are assumed to be already existing.
@@ -77,7 +116,7 @@ await scatterGatherGateway.Scatter(scatterRequestId, scatterPartIds, () =>
 {
     // In this callback you typically send a message to a worker through a message queue.
     Console.WriteLine($"Scattered {scatterPartIds.Count} parts.");
-    return Task.FromResult(0);
+    return Task.CompletedTask;
 });
 
 // Call EndScatter once all scatter parts have been added to the scatter-gather operation.

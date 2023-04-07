@@ -78,6 +78,7 @@ public class ScatterGatherGateway : IScatterGatherGateway
 
     public async Task BeginScatter(ScatterRequestId requestId, string info)
     {
+        await CreateTables();
         await Cleanup(requestId);
         await _dynamoDbClient.PutItemAsync(_requestTableName, RequestItem(requestId, DateTime.UtcNow, info));
     }
@@ -113,6 +114,23 @@ public class ScatterGatherGateway : IScatterGatherGateway
         await DeleteParts(requestId, partIds);
         await TryHandleCompletion(requestId, lockerId: $"{nameof(Gather)}-{partIds.First().Value}", handleCompletion);
     }
+
+    private Task CreateTables() =>
+        Task.WhenAll(
+            DynamoDbUtil.SafeCreateTable(_dynamoDbClient, new CreateTableRequest
+            {
+                TableName = _requestTableName,
+                KeySchema = new List<KeySchemaElement> { new("RequestId", KeyType.HASH) },
+                AttributeDefinitions = new List<AttributeDefinition> { new("RequestId", ScalarAttributeType.S) },
+                BillingMode = BillingMode.PAY_PER_REQUEST
+            }),
+            DynamoDbUtil.SafeCreateTable(_dynamoDbClient, new CreateTableRequest
+            {
+                TableName = _partTableName,
+                KeySchema = new List<KeySchemaElement> { new("RequestId", KeyType.HASH), new("PartId", KeyType.RANGE) },
+                AttributeDefinitions = new List<AttributeDefinition> { new("RequestId", ScalarAttributeType.S), new("PartId", ScalarAttributeType.S) },
+                BillingMode = BillingMode.PAY_PER_REQUEST
+            }));
 
     private async Task TryHandleCompletion(ScatterRequestId requestId, string lockerId, Func<string, Task> handleCompletion)
     {

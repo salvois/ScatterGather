@@ -43,7 +43,7 @@ var scatterGatherGateway = new ScatterGatherGatewayMetrics(
 var scatterRequestId = new ScatterRequestId("42");
 
 // Each scatter-gather operation includes multiple sub-operation, each identified by a ScatterPartId.
-var scatterPartIds = Enumerable.Range(0, 100).Select(i => new ScatterPartId(i.ToString())).ToList();
+var scatterPartIds = Enumerable.Range(0, 30).Select(i => new ScatterPartId(i.ToString())).ToList();
 
 // BeginScatter initializes the state for a new scatter-gather request
 await scatterGatherGateway.BeginScatter(scatterRequestId, "This is a custom text associated with this request");
@@ -54,7 +54,7 @@ await scatterGatherGateway.Scatter(scatterRequestId, scatterPartIds, () =>
 {
     // In this callback you typically send a message to a worker through a message queue.
     Console.WriteLine($"Scattered {scatterPartIds.Count} parts.");
-    return Task.FromResult(0);
+    return Task.CompletedTask;
 });
 
 // Call EndScatter once all scatter parts have been added to the scatter-gather operation.
