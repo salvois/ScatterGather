@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net6.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<WarningsAsErrors>nullable</WarningsAsErrors>
+		<Version>0.4.0</Version>
+		<Authors>Salvo Isaja</Authors>
+		<Company>Salvo Isaja</Company>
+		<Copyright>Copyright 2023  Salvatore Isaja</Copyright>
+		<PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+		<PackageProjectUrl>https://github.com/salvois/ScatterGather</PackageProjectUrl>
+		<Description>.NET library to implement the scatter-gather pattern using MongoDB to store progress state</Description>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MongoDB.Driver" Version="2.23.1" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\ScatterGather\ScatterGather.csproj" />
+	</ItemGroup>
+
+</Project>

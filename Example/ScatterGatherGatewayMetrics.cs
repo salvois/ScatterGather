@@ -1,6 +1,6 @@
 ﻿/*
-DynamoScatterGather - .NET library to implement the scatter-gather pattern
-using Amazon DynamoDB to store progress state
+ScatterGather - .NET library to implement the scatter-gather pattern
+using a database to store distributed progress state
 
 Copyright 2023 Salvatore ISAJA. All rights reserved.
 
@@ -29,7 +29,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
-using DynamoScatterGather;
+using ScatterGather;
 
 namespace Example;
 
@@ -46,10 +46,10 @@ public class ScatterGatherGatewayMetrics : IScatterGatherGateway
         _decoratee = decoratee;
     }
 
-    public async Task BeginScatter(ScatterRequestId requestId, string info)
+    public async Task BeginScatter(ScatterRequestId requestId, string context)
     {
         var stopwatch = Stopwatch.StartNew();
-        await _decoratee.BeginScatter(requestId, info);
+        await _decoratee.BeginScatter(requestId, context);
         stopwatch.Stop();
         _beginScatterCount++;
         Console.WriteLine($"{nameof(BeginScatter)} #{_beginScatterCount} executed in {stopwatch.Elapsed.TotalMilliseconds} ms.");

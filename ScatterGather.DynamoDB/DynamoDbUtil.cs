@@ -1,6 +1,6 @@
 ﻿/*
-DynamoScatterGather - .NET library to implement the scatter-gather pattern
-using Amazon DynamoDB to store progress state
+ScatterGather - .NET library to implement the scatter-gather pattern
+using a database to store distributed progress state
 
 Copyright 2023 Salvatore ISAJA. All rights reserved.
 
@@ -26,20 +26,40 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
+using Amazon.DynamoDBv2;
+using Amazon.DynamoDBv2.Model;
 
-namespace DynamoScatterGather;
+namespace ScatterGather.DynamoDB;
 
-public readonly record struct ScatterRequestId(string Value);
-
-public readonly record struct ScatterPartId(string Value);
-
-public interface IScatterGatherGateway
+internal static class DynamoDbUtil
 {
-    Task BeginScatter(ScatterRequestId requestId, string context);
-    Task Scatter(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task> callback);
-    Task<T> Scatter<T>(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task<T>> callback);
-    Task EndScatter(ScatterRequestId requestId, Func<string, Task> handleCompletion);
-    Task Gather(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<string, Task> handleCompletion);
+    public static async Task SafeCreateTable(AmazonDynamoDBClient dynamoDbClient, CreateTableRequest createTableRequest)
+    {
+        TableStatus tableStatus;
+        try
+        {
+            var createTableResponse = await dynamoDbClient.CreateTableAsync(createTableRequest);
+            tableStatus = createTableResponse.TableDescription.TableStatus;
+        }
+        catch (ResourceInUseException)
+        {
+            return;
+        }
+        for (var i = 0; i < 60; i++)
+        {
+            if (tableStatus == TableStatus.ACTIVE)
+                return;
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            try
+            {
+                var describeTableResponse = await dynamoDbClient.DescribeTableAsync(createTableRequest.TableName);
+                tableStatus = describeTableResponse.Table.TableStatus;
+            }
+            catch (ResourceNotFoundException)
+            {
+            }
+        }
+        throw new ResourceNotFoundException($"Could not create table {createTableRequest.TableName}");
+    }
 }

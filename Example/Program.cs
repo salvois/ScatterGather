@@ -1,7 +1,7 @@
 ﻿/*
-DynamoScatterGather - .NET library to implement the scatter-gather pattern
-using Amazon DynamoDB to store progress state
-
+ScatterGather - .NET library to implement the scatter-gather pattern
+using a database to store distributed progress state
+   
 Copyright 2023 Salvatore ISAJA. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -28,16 +28,16 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using DynamoScatterGather;
 using Example;
+using MongoDB.Driver;
+using ScatterGather;
 
-// This example uses two DynamoDB tables that are assumed to be already existing.
-// They are used to store scatter requests and scattered parts respectively.
-// The key of the request table must be a single string field named RequestId.
-// The key of the part table must be a pair of string fields named RequestId and PartId.
-// Here we decorate our ScatterGatherGateway to print duration and number of invocations.
+// Choose your scatter-gather gateway implementation.
+// Here we decorate our gateway to print duration and number of invocations.
 var scatterGatherGateway = new ScatterGatherGatewayMetrics(
-    new ScatterGatherGateway("DynamoScatterGather-example-requests", "DynamoScatterGather-example-parts"));
+    //CreateDynamoScatterGatherGateway()
+    CreateMongoScatterGatherGateway()
+);
 
 // The ScatterRequestId represents a single scatter-gather operation with its own progress.
 var scatterRequestId = new ScatterRequestId("42");
@@ -69,6 +69,26 @@ await scatterGatherGateway.EndScatter(scatterRequestId, HandleCompletion);
 // HandleCompletion callback function.
 foreach (var scatterPartId in scatterPartIds)
     await scatterGatherGateway.Gather(scatterRequestId, new[] { scatterPartId }, HandleCompletion);
+
+
+// This creates a scatter-gather gateway using two MongoDB two collections in the specified database to store progress.
+// These collections are named after the specified prefix, followed by .Requests and .Parts respectively.
+// Here we decorate our ScatterGatherGateway to print duration and number of invocations.
+static IScatterGatherGateway CreateMongoScatterGatherGateway()
+{
+    var mongoClient = new MongoClient(new MongoUrl("mongodb://localhost:27017/"));
+    return new ScatterGather.MongoDB.ScatterGatherGateway(mongoClient.GetDatabase("MongoScatterGatherExample"), "ScatterGather");
+}
+
+// This creates a scatter-gather gateway using two DynamoDB tables to store progress.
+// They are used to store scatter requests and scattered parts respectively.
+// They are automatically created if they don't exist.
+static IScatterGatherGateway CreateDynamoScatterGatherGateway()
+{
+    Environment.SetEnvironmentVariable("AWS_ACCESS_KEY_ID", "test");
+    Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", "test");
+    return new ScatterGather.DynamoDB.ScatterGatherGateway("http://localhost:8998", "DynamoScatterGather-example-requests", "DynamoScatterGather-example-parts");
+}
 
 // The completion function that will be called once all scattered parts have been gathered.
 // This allows executing some action after the whole scatter-gather operation is completed.

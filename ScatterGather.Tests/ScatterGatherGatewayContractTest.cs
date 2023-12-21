@@ -1,6 +1,6 @@
 /*
-DynamoScatterGather - .NET library to implement the scatter-gather pattern
-using Amazon DynamoDB to store progress state
+ScatterGather - .NET library to implement the scatter-gather pattern
+using a database to store distributed progress state
 
 Copyright 2023 Salvatore ISAJA. All rights reserved.
 
@@ -16,7 +16,7 @@ and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED THE COPYRIGHT HOLDER ``AS IS'' AND ANY EXPRESS
 OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
-OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN
+OF MERCHANTABILITYMongoScatterGather AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN
 NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY DIRECT,
 INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
 (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
@@ -27,35 +27,20 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 using System;
 using System.Threading.Tasks;
-using Amazon.DynamoDBv2;
 using FluentAssertions;
 using NUnit.Framework;
 
-namespace DynamoScatterGather.Tests;
+namespace ScatterGather.Tests;
 
-[TestFixture]
-public static class ScatterGatherGatewayTest
+public abstract class ScatterGatherGatewayContractTest
 {
-    private const string DynamoDbServiceUrl = "http://localhost:8998";
-    private const string RequestTableName = "ScatterRequests";
-    private const string PartTableName = "ScatterParts";
-
     private static Task DoNothingCallback() =>
         Task.CompletedTask;
 
-    private static IScatterGatherGateway CreateScatterGatherGateway() =>
-        new ScatterGatherGateway(DynamoDbServiceUrl, RequestTableName, PartTableName);
-
-    [OneTimeTearDown]
-    public static async Task OneTimeTearDown()
-    {
-        var client = new AmazonDynamoDBClient(new AmazonDynamoDBConfig { ServiceURL = DynamoDbServiceUrl });
-        await client.DeleteTableAsync(PartTableName);
-        await client.DeleteTableAsync(RequestTableName);
-    }
+    protected abstract IScatterGatherGateway CreateScatterGatherGateway();
 
     [Test]
-    public static async Task NothingToScatter()
+    public async Task NothingToScatter()
     {
         var gateway = CreateScatterGatherGateway();
         var completionHandler = new CompletionHandler();
@@ -68,7 +53,7 @@ public static class ScatterGatherGatewayTest
     }
 
     [Test]
-    public static async Task SimpleScatterGather()
+    public async Task SimpleScatterGather()
     {
         var gateway = CreateScatterGatherGateway();
         var completionHandler = new CompletionHandler();
@@ -87,7 +72,7 @@ public static class ScatterGatherGatewayTest
     }
 
     [Test]
-    public static async Task GatherFasterThanScatter()
+    public async Task GatherFasterThanScatter()
     {
         var gateway = CreateScatterGatherGateway();
         var completionHandler = new CompletionHandler();
@@ -103,7 +88,7 @@ public static class ScatterGatherGatewayTest
     }
 
     [Test]
-    public static async Task DuplicateBeforeCompletion()
+    public async Task DuplicateBeforeCompletion()
     {
         var gateway = CreateScatterGatherGateway();
         var completionHandler = new CompletionHandler();
@@ -123,7 +108,7 @@ public static class ScatterGatherGatewayTest
     }
 
     [Test]
-    public static async Task DuplicateAfterCompletion()
+    public async Task DuplicateAfterCompletion()
     {
         var gateway = CreateScatterGatherGateway();
         var completionHandler = new CompletionHandler();
@@ -145,7 +130,7 @@ public static class ScatterGatherGatewayTest
     }
 
     [Test]
-    public static async Task ErrorOnCompletionHandlerAndRetry()
+    public async Task ErrorOnCompletionHandlerAndRetry()
     {
         var gateway = CreateScatterGatherGateway();
         var completionHandler = new CompletionHandler();
@@ -166,7 +151,7 @@ public static class ScatterGatherGatewayTest
     }
 
     [Test]
-    public static async Task RetryScatterWithNewIds()
+    public async Task RetryScatterWithNewIds()
     {
         var gateway = CreateScatterGatherGateway();
         var completionHandler = new CompletionHandler();
