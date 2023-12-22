@@ -1,4 +1,4 @@
-DynamoScatterGather - .NET library to implement the scatter-gather pattern using Amazon DynamoDB to store progress state
+ScatterGather - .NET library to implement the scatter-gather pattern using a database to store distributed progress state
 
 Copyright 2023 Salvatore ISAJA. All rights reserved.
 

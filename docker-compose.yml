@@ -7,3 +7,8 @@ services:
     command: -jar DynamoDBLocal.jar -sharedDb
     ports:
       - "8998:8000"
+  mongo:
+    container_name: mongo
+    image: mongo:latest
+    ports:
+      - "27017:27017"
