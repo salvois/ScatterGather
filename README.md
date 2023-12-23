@@ -1,7 +1,10 @@
 # ScatterGather - .NET library to implement the scatter-gather pattern using a database to store distributed progress state
 
-* [`ScatterGather.DynamoDB` ![NuGet](https://img.shields.io/nuget/v/ScatterGather.DynamoDB.svg)](https://www.nuget.org/packages/ScatterGather.DynamoDB)
-* [`ScatterGather.MongoDB` ![NuGet](https://img.shields.io/nuget/v/ScatterGather.MongoDB.svg)](https://www.nuget.org/packages/ScatterGather.MongoDB)
+| NuGet package | Link |
+|-------------- | ---- |
+| ScatterGather | [![NuGet](https://img.shields.io/nuget/v/ScatterGather.svg)](https://www.nuget.org/packages/ScatterGather) |
+| ScatterGather.DynamoDB | [![NuGet](https://img.shields.io/nuget/v/ScatterGather.DynamoDB.svg)](https://www.nuget.org/packages/ScatterGather.DynamoDB) |
+| ScatterGather.MongoDB | [![NuGet](https://img.shields.io/nuget/v/ScatterGather.MongoDB.svg)](https://www.nuget.org/packages/ScatterGather.MongoDB) |
 
 [Scatter-gather](https://www.enterpriseintegrationpatterns.com/patterns/messaging/BroadcastAggregate.html) is an enteprise integration pattern where a single big operation is split into a number of sub-operations, usually performed by separate workers, then some other operation must be carried on after all sub-operations have finished.
 

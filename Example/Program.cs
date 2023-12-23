@@ -71,7 +71,7 @@ foreach (var scatterPartId in scatterPartIds)
     await scatterGatherGateway.Gather(scatterRequestId, new[] { scatterPartId }, HandleCompletion);
 
 
-// This creates a scatter-gather gateway using two MongoDB two collections in the specified database to store progress.
+// This creates a scatter-gather gateway using two MongoDB collections in the specified database to store progress.
 // These collections are named after the specified prefix, followed by .Requests and .Parts respectively.
 // Here we decorate our ScatterGatherGateway to print duration and number of invocations.
 static IScatterGatherGateway CreateMongoScatterGatherGateway()
