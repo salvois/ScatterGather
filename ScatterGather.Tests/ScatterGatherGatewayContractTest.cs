@@ -27,8 +27,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 using System;
 using System.Threading.Tasks;
-using FluentAssertions;
 using NUnit.Framework;
+using Shouldly;
 
 namespace ScatterGather.Tests;
 
@@ -48,8 +48,8 @@ public abstract class ScatterGatherGatewayContractTest
 
         await gateway.BeginScatter(scatterRequestId, "context");
         await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeTrue();
-        completionHandler.Context.Should().Be("context");
+        completionHandler.Completed.ShouldBeTrue();
+        completionHandler.Context.ShouldBe("context");
     }
 
     [Test]
@@ -62,13 +62,13 @@ public abstract class ScatterGatherGatewayContractTest
         await gateway.BeginScatter(scatterRequestId, "context");
         await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("lorem"), new("ipsum") }, DoNothingCallback);
         await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
 
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("ipsum") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeTrue();
-        completionHandler.Context.Should().Be("context");
+        completionHandler.Completed.ShouldBeTrue();
+        completionHandler.Context.ShouldBe("context");
     }
 
     [Test]
@@ -81,10 +81,10 @@ public abstract class ScatterGatherGatewayContractTest
 
         await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("lorem") }, DoNothingCallback);
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
 
         await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeTrue();
+        completionHandler.Completed.ShouldBeTrue();
     }
 
     [Test]
@@ -97,14 +97,14 @@ public abstract class ScatterGatherGatewayContractTest
         await gateway.BeginScatter(scatterRequestId, "context");
         await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("lorem"), new("ipsum") }, DoNothingCallback);
         await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
 
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("ipsum") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("ipsum") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeTrue();
+        completionHandler.Completed.ShouldBeTrue();
     }
 
     [Test]
@@ -117,16 +117,16 @@ public abstract class ScatterGatherGatewayContractTest
         await gateway.BeginScatter(scatterRequestId, "context");
         await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("lorem"), new("ipsum") }, DoNothingCallback);
         await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
 
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("ipsum") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeTrue();
+        completionHandler.Completed.ShouldBeTrue();
 
         completionHandler = new CompletionHandler();
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
     }
 
     [Test]
@@ -140,14 +140,14 @@ public abstract class ScatterGatherGatewayContractTest
         await gateway.BeginScatter(scatterRequestId, "context");
         await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("lorem"), new("ipsum") }, DoNothingCallback);
         await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
 
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("ipsum") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
         var act = () => gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, HandleCompletionThrowing);
-        await act.Should().ThrowAsync<DivideByZeroException>();
+        await act.ShouldThrowAsync<DivideByZeroException>();
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeTrue();
+        completionHandler.Completed.ShouldBeTrue();
     }
 
     [Test]
@@ -160,26 +160,26 @@ public abstract class ScatterGatherGatewayContractTest
         await gateway.BeginScatter(scatterRequestId, "context");
         await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("lorem"), new("ipsum"), new("dolor"), new("consectetur") }, DoNothingCallback);
         await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
 
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("ipsum") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("dolor") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
 
         await gateway.BeginScatter(scatterRequestId, "context");
         await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("dolor"), new("sit"), new("amet") }, DoNothingCallback);
         await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
 
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("sit") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("dolor") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeFalse();
+        completionHandler.Completed.ShouldBeFalse();
         await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("amet") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.Should().BeTrue();
+        completionHandler.Completed.ShouldBeTrue();
     }
 
     private class CompletionHandler
