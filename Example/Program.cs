@@ -8,9 +8,9 @@ using MongoDB.Driver;
 using ScatterGather;
 
 // Choose your scatter-gather gateway implementation
-//var scatterGatherGateway = CreateDynamoScatterGatherGateway(); //46s scatter+47s gather for 3000 parts
-//var scatterGatherGateway = CreateMongoScatterGatherGateway(); //6s scatter+30s gather for 3000 parts
-var scatterGatherGateway = CreatePostgresScatterGatherGateway(); //7s scatter+11s gather for 3000 parts
+//var scatterGatherGateway = CreateDynamoScatterGatherGateway(); //27s scatter+31s gather for 3000 parts
+//var scatterGatherGateway = CreateMongoScatterGatherGateway(); //3s scatter+8s gather for 3000 parts
+var scatterGatherGateway = CreatePostgresScatterGatherGateway(); //6s scatter+6s gather for 3000 parts
 
 // The ScatterRequestId represents a single scatter-gather operation with its own progress
 var scatterRequestId = new ScatterRequestId("42");
