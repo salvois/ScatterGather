@@ -1,8 +1,8 @@
-﻿/*
+/*
 ScatterGather - .NET library to implement the scatter-gather pattern
 using a database to store distributed progress state
 
-Copyright 2023-2025 Salvatore ISAJA. All rights reserved.
+Copyright 2023-2026 Salvatore ISAJA. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -25,17 +25,33 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-namespace ScatterGather;
+using System.Threading.Tasks;
+using Npgsql;
+using NUnit.Framework;
+using ScatterGather.Postgres;
 
-public readonly record struct ScatterRequestId(string Value);
+namespace ScatterGather.Tests;
 
-public readonly record struct ScatterPartId(string Value);
-
-public interface IScatterGatherGateway
+[TestFixture]
+public class PostgresScatterGatherGatewayTest : ScatterGatherGatewayContractTest
 {
-    Task BeginScatter(ScatterRequestId requestId, string context);
-    Task Scatter(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task> callback);
-    Task<T> Scatter<T>(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task<T>> callback);
-    Task EndScatter(ScatterRequestId requestId, Func<string, Task> handleCompletion);
-    Task Gather(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<string, Task> handleCompletion);
+    private const string ConnectionString = "Host=localhost;Username=postgres;Password=password;Database=postgres";
+    private const string RequestTableName = "scatter_requests";
+    private const string PartTableName = "scatter_parts";
+
+    protected override ScatterGatherGateway CreateScatterGatherGateway() =>
+        ScatterGatherFactory.Create(ConnectionString, RequestTableName, PartTableName);
+
+    [OneTimeTearDown]
+    public static async Task OneTimeTearDown()
+    {
+        await using var conn = new NpgsqlConnection(ConnectionString);
+        await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            $"""
+             DROP TABLE IF EXISTS {PartTableName};
+             DROP TABLE IF EXISTS {RequestTableName};
+             """, conn);
+        await cmd.ExecuteNonQueryAsync();
+    }
 }

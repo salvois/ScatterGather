@@ -2,7 +2,7 @@
 ScatterGather - .NET library to implement the scatter-gather pattern
 using a database to store distributed progress state
 
-Copyright 2023-2025 Salvatore ISAJA. All rights reserved.
+Copyright 2023-2026 Salvatore ISAJA. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -25,7 +25,6 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-
 using System.Threading.Tasks;
 using Amazon.DynamoDBv2;
 using NUnit.Framework;
@@ -40,8 +39,8 @@ public class DynamoScatterGatherGatewayTest : ScatterGatherGatewayContractTest
     private const string RequestTableName = "ScatterRequests";
     private const string PartTableName = "ScatterParts";
 
-    protected override IScatterGatherGateway CreateScatterGatherGateway() =>
-        new ScatterGatherGateway(DynamoDbServiceUrl, RequestTableName, PartTableName);
+    protected override ScatterGatherGateway CreateScatterGatherGateway() =>
+        ScatterGatherFactory.Create(DynamoDbServiceUrl, RequestTableName, PartTableName);
 
     [OneTimeTearDown]
     public static async Task OneTimeTearDown()

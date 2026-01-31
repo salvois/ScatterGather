@@ -2,7 +2,7 @@
 ScatterGather - .NET library to implement the scatter-gather pattern
 using a database to store distributed progress state
 
-Copyright 2023-2025 Salvatore ISAJA. All rights reserved.
+Copyright 2023-2026 Salvatore ISAJA. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -33,7 +33,7 @@ using MongoDB.Driver;
 
 namespace ScatterGather.MongoDB;
 
-public class ScatterGatherGateway : IScatterGatherGateway
+internal class Store : IScatterGatherStore
 {
     private record RequestDoc(string Id, DateTime CreationTime, bool ScatterCompleted, string? LockerId, string Context);
     private record PartDocId(string PartId, string RequestId);
@@ -44,7 +44,7 @@ public class ScatterGatherGateway : IScatterGatherGateway
     private readonly IMongoCollection<PartDoc> _partCollection;
 
 
-    public ScatterGatherGateway(IMongoDatabase mongoDatabase, string collectionNamePrefix)
+    public Store(IMongoDatabase mongoDatabase, string collectionNamePrefix)
     {
         _requestCollection = mongoDatabase.GetCollection<RequestDoc>($"{collectionNamePrefix}.Requests");
         _partCollection = mongoDatabase.GetCollection<PartDoc>($"{collectionNamePrefix}.Parts");
@@ -57,17 +57,8 @@ public class ScatterGatherGateway : IScatterGatherGateway
         await _requestCollection.InsertOneAsync(new RequestDoc(Id: requestId.Value, CreationTime: DateTime.UtcNow, ScatterCompleted: false, LockerId: null, Context: context));
     }
 
-    public async Task Scatter(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task> callback)
-    {
-        await PutParts(requestId, partIds);
-        await callback();
-    }
-
-    public async Task<T> Scatter<T>(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task<T>> callback)
-    {
-        await PutParts(requestId, partIds);
-        return await callback();
-    }
+    public Task MarkScattered(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds) =>
+        PutParts(requestId, partIds);
 
     public async Task EndScatter(ScatterRequestId requestId, Func<string, Task> handleCompletion)
     {
@@ -77,10 +68,10 @@ public class ScatterGatherGateway : IScatterGatherGateway
         await TryHandleCompletion(requestId, lockerId: $"{nameof(EndScatter)}-{requestId.Value}", handleCompletion);
     }
 
-    public async Task Gather(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<string, Task> handleCompletion)
+    public async Task MarkGathered(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<string, Task> handleCompletion)
     {
         await DeleteParts(requestId, partIds);
-        await TryHandleCompletion(requestId, lockerId: $"{nameof(Gather)}-{partIds.First().Value}", handleCompletion);
+        await TryHandleCompletion(requestId, lockerId: $"{nameof(MarkGathered)}-{partIds.First().Value}", handleCompletion);
     }
 
     private Task EnsureIndexes() =>
@@ -109,8 +100,8 @@ public class ScatterGatherGateway : IScatterGatherGateway
     private async Task<Completion> TryLockRequest(ScatterRequestId requestId, string lockerId)
     {
         var updated = await _requestCollection.FindOneAndUpdateAsync(
-                r => r.Id == requestId.Value && r.ScatterCompleted == true && (r.LockerId == null || r.LockerId == lockerId),
-                Builders<RequestDoc>.Update.Set(r => r.LockerId, lockerId));
+            r => r.Id == requestId.Value && r.ScatterCompleted == true && (r.LockerId == null || r.LockerId == lockerId),
+            Builders<RequestDoc>.Update.Set(r => r.LockerId, lockerId));
         return updated != null
             ? Completion.CreateCompleted(updated.Context)
             : Completion.CreateNotCompleted();

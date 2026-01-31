@@ -2,7 +2,7 @@
 ScatterGather - .NET library to implement the scatter-gather pattern
 using a database to store distributed progress state
 
-Copyright 2023-2025 Salvatore ISAJA. All rights reserved.
+Copyright 2023-2026 Salvatore ISAJA. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -34,9 +34,9 @@ namespace ScatterGather.Tests;
 [TestFixture]
 public class MongoScatterGatherGatewayTest : ScatterGatherGatewayContractTest
 {
-    protected override IScatterGatherGateway CreateScatterGatherGateway()
+    protected override ScatterGatherGateway CreateScatterGatherGateway()
     {
         var client = new MongoClient(new MongoUrl("mongodb://localhost:27017/"));
-        return new ScatterGatherGateway(client.GetDatabase("ScatterGatherGatewayTest"), "ScatterGather");
+        return ScatterGatherFactory.Create(client.GetDatabase("ScatterGatherGatewayTest"), "ScatterGather");
     }
 }

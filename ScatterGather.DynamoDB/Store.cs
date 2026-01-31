@@ -2,7 +2,7 @@
 ScatterGather - .NET library to implement the scatter-gather pattern
 using a database to store distributed progress state
 
-Copyright 2023-2025 Salvatore ISAJA. All rights reserved.
+Copyright 2023-2026 Salvatore ISAJA. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -34,7 +34,7 @@ using Amazon.DynamoDBv2.Model;
 
 namespace ScatterGather.DynamoDB;
 
-public class ScatterGatherGateway : IScatterGatherGateway
+internal class Store : IScatterGatherStore
 {
     private const int MaxBatchSize = 25;
     private readonly string _requestTableName;
@@ -62,14 +62,14 @@ public class ScatterGatherGateway : IScatterGatherGateway
             ["PartId"] = new AttributeValue { S = partId.Value }
         };
 
-    public ScatterGatherGateway(string requestTableName, string partTableName)
+    public Store(string requestTableName, string partTableName)
     {
         _requestTableName = requestTableName;
         _partTableName = partTableName;
         _dynamoDbClient = new AmazonDynamoDBClient();
     }
 
-    public ScatterGatherGateway(string dynamoDbServiceUrlOption, string requestTableName, string partTableName)
+    public Store(string dynamoDbServiceUrlOption, string requestTableName, string partTableName)
     {
         _requestTableName = requestTableName;
         _partTableName = partTableName;
@@ -83,17 +83,8 @@ public class ScatterGatherGateway : IScatterGatherGateway
         await _dynamoDbClient.PutItemAsync(_requestTableName, RequestItem(requestId, DateTime.UtcNow, context));
     }
 
-    public async Task Scatter(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task> callback)
-    {
-        await PutParts(requestId, partIds);
-        await callback();
-    }
-
-    public async Task<T> Scatter<T>(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds, Func<Task<T>> callback)
-    {
-        await PutParts(requestId, partIds);
-        return await callback();
-    }
+    public Task MarkScattered(ScatterRequestId requestId, IEnumerable<ScatterPartId> partIds) =>
+        PutParts(requestId, partIds);
 
     public async Task EndScatter(ScatterRequestId requestId, Func<string, Task> handleCompletion)
     {
@@ -109,10 +100,10 @@ public class ScatterGatherGateway : IScatterGatherGateway
         await TryHandleCompletion(requestId, lockerId: $"{nameof(EndScatter)}-{requestId.Value}", handleCompletion);
     }
 
-    public async Task Gather(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<string, Task> handleCompletion)
+    public async Task MarkGathered(ScatterRequestId requestId, IReadOnlyCollection<ScatterPartId> partIds, Func<string, Task> handleCompletion)
     {
         await DeleteParts(requestId, partIds);
-        await TryHandleCompletion(requestId, lockerId: $"{nameof(Gather)}-{partIds.First().Value}", handleCompletion);
+        await TryHandleCompletion(requestId, lockerId: $"{nameof(MarkGathered)}-{partIds.First().Value}", handleCompletion);
     }
 
     private Task CreateTables() =>

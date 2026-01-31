@@ -2,7 +2,7 @@
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
-		<TargetFramework>net6.0</TargetFramework>
+		<TargetFramework>net8.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<WarningsAsErrors>nullable</WarningsAsErrors>
 	</PropertyGroup>
@@ -10,6 +10,7 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\ScatterGather.DynamoDB\ScatterGather.DynamoDB.csproj" />
 	  <ProjectReference Include="..\ScatterGather.MongoDB\ScatterGather.MongoDB.csproj" />
+	  <ProjectReference Include="..\ScatterGather.Postgres\ScatterGather.Postgres.csproj" />
 	</ItemGroup>
 
 </Project>

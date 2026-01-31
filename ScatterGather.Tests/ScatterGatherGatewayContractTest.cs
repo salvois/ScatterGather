@@ -2,7 +2,7 @@
 ScatterGather - .NET library to implement the scatter-gather pattern
 using a database to store distributed progress state
 
-Copyright 2023-2025 Salvatore ISAJA. All rights reserved.
+Copyright 2023-2026 Salvatore ISAJA. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -37,7 +37,7 @@ public abstract class ScatterGatherGatewayContractTest
     private static Task DoNothingCallback() =>
         Task.CompletedTask;
 
-    protected abstract IScatterGatherGateway CreateScatterGatherGateway();
+    protected abstract ScatterGatherGateway CreateScatterGatherGateway();
 
     [Test]
     public async Task NothingToScatter()
@@ -46,8 +46,9 @@ public abstract class ScatterGatherGatewayContractTest
         var completionHandler = new CompletionHandler();
         var scatterRequestId = new ScatterRequestId("requestId");
 
-        await gateway.BeginScatter(scatterRequestId, "context");
-        await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
+        await using (var scatterScope = await gateway.CreateScatterScopeAsync(scatterRequestId, "context", completionHandler.HandleCompletion))
+        {
+        }
         completionHandler.Completed.ShouldBeTrue();
         completionHandler.Context.ShouldBe("context");
     }
@@ -59,14 +60,15 @@ public abstract class ScatterGatherGatewayContractTest
         var completionHandler = new CompletionHandler();
         var scatterRequestId = new ScatterRequestId("requestId");
 
-        await gateway.BeginScatter(scatterRequestId, "context");
-        await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("lorem"), new("ipsum") }, DoNothingCallback);
-        await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
+        await using (var scatterScope = await gateway.CreateScatterScopeAsync(scatterRequestId, "context", completionHandler.HandleCompletion))
+        {
+            await scatterScope.AddAsync([new ScatterPartId("lorem"), new ScatterPartId("ipsum")], DoNothingCallback);
+        }
         completionHandler.Completed.ShouldBeFalse();
 
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("ipsum") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("ipsum")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeFalse();
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("lorem")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeTrue();
         completionHandler.Context.ShouldBe("context");
     }
@@ -77,13 +79,12 @@ public abstract class ScatterGatherGatewayContractTest
         var gateway = CreateScatterGatherGateway();
         var completionHandler = new CompletionHandler();
         var scatterRequestId = new ScatterRequestId("requestId");
-        await gateway.BeginScatter(scatterRequestId, "context");
-
-        await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("lorem") }, DoNothingCallback);
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.ShouldBeFalse();
-
-        await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
+        await using (var scatterScope = await gateway.CreateScatterScopeAsync(scatterRequestId, "context", completionHandler.HandleCompletion))
+        {
+            await scatterScope.AddAsync([new ScatterPartId("lorem")], DoNothingCallback);
+            await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("lorem")], DoNothingCallback, completionHandler.HandleCompletion);
+            completionHandler.Completed.ShouldBeFalse();
+        }
         completionHandler.Completed.ShouldBeTrue();
     }
 
@@ -94,16 +95,17 @@ public abstract class ScatterGatherGatewayContractTest
         var completionHandler = new CompletionHandler();
         var scatterRequestId = new ScatterRequestId("requestId");
 
-        await gateway.BeginScatter(scatterRequestId, "context");
-        await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("lorem"), new("ipsum") }, DoNothingCallback);
-        await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
+        await using (var scatterScope = await gateway.CreateScatterScopeAsync(scatterRequestId, "context", completionHandler.HandleCompletion))
+        {
+            await scatterScope.AddAsync([new ScatterPartId("lorem"), new ScatterPartId("ipsum")], DoNothingCallback);
+        }
         completionHandler.Completed.ShouldBeFalse();
 
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("ipsum") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("ipsum")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeFalse();
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("ipsum") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("ipsum")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeFalse();
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("lorem")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeTrue();
     }
 
@@ -114,18 +116,19 @@ public abstract class ScatterGatherGatewayContractTest
         var completionHandler = new CompletionHandler();
         var scatterRequestId = new ScatterRequestId("requestId");
 
-        await gateway.BeginScatter(scatterRequestId, "context");
-        await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("lorem"), new("ipsum") }, DoNothingCallback);
-        await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
+        await using (var scatterScope = await gateway.CreateScatterScopeAsync(scatterRequestId, "context", completionHandler.HandleCompletion))
+        {
+            await scatterScope.AddAsync([new ScatterPartId("lorem"), new ScatterPartId("ipsum")], DoNothingCallback);
+        }
         completionHandler.Completed.ShouldBeFalse();
 
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("ipsum") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("ipsum")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeFalse();
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("lorem")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeTrue();
 
         completionHandler = new CompletionHandler();
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("lorem")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeFalse();
     }
 
@@ -137,16 +140,17 @@ public abstract class ScatterGatherGatewayContractTest
         static Task HandleCompletionThrowing(string context) => throw new DivideByZeroException();
         var scatterRequestId = new ScatterRequestId("requestId");
 
-        await gateway.BeginScatter(scatterRequestId, "context");
-        await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("lorem"), new("ipsum") }, DoNothingCallback);
-        await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
+        await using (var scatterScope = await gateway.CreateScatterScopeAsync(scatterRequestId, "context", completionHandler.HandleCompletion))
+        {
+            await scatterScope.AddAsync([new ScatterPartId("lorem"), new ScatterPartId("ipsum")], DoNothingCallback);
+        }
         completionHandler.Completed.ShouldBeFalse();
 
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("ipsum") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("ipsum")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeFalse();
-        var act = () => gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, HandleCompletionThrowing);
+        var act = () => gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("lorem")], DoNothingCallback, HandleCompletionThrowing);
         await act.ShouldThrowAsync<DivideByZeroException>();
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("lorem")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeTrue();
     }
 
@@ -157,41 +161,37 @@ public abstract class ScatterGatherGatewayContractTest
         var completionHandler = new CompletionHandler();
         var scatterRequestId = new ScatterRequestId("requestId");
 
-        await gateway.BeginScatter(scatterRequestId, "context");
-        await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("lorem"), new("ipsum"), new("dolor"), new("consectetur") }, DoNothingCallback);
-        await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
+        await using (var scatterScope = await gateway.CreateScatterScopeAsync(scatterRequestId, "context", completionHandler.HandleCompletion))
+        {
+            await scatterScope.AddAsync([new ScatterPartId("lorem"), new ScatterPartId("ipsum"), new ScatterPartId("dolor"), new ScatterPartId("consectetur")], DoNothingCallback);
+        }
         completionHandler.Completed.ShouldBeFalse();
 
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("ipsum") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("ipsum")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeFalse();
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("dolor") }, completionHandler.HandleCompletion);
-        completionHandler.Completed.ShouldBeFalse();
-
-        await gateway.BeginScatter(scatterRequestId, "context");
-        await gateway.Scatter(scatterRequestId, new ScatterPartId[] { new("dolor"), new("sit"), new("amet") }, DoNothingCallback);
-        await gateway.EndScatter(scatterRequestId, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("dolor")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeFalse();
 
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("sit") }, completionHandler.HandleCompletion);
+        await using (var scatterScope = await gateway.CreateScatterScopeAsync(scatterRequestId, "context", completionHandler.HandleCompletion))
+        {
+            await scatterScope.AddAsync([new ScatterPartId("dolor"), new ScatterPartId("sit"), new ScatterPartId("amet")], DoNothingCallback);
+        }
         completionHandler.Completed.ShouldBeFalse();
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("lorem") }, completionHandler.HandleCompletion);
+
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("sit")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeFalse();
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("dolor") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("lorem")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeFalse();
-        await gateway.Gather(scatterRequestId, new ScatterPartId[] { new("amet") }, completionHandler.HandleCompletion);
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("dolor")], DoNothingCallback, completionHandler.HandleCompletion);
+        completionHandler.Completed.ShouldBeFalse();
+        await gateway.GatherAsync<string>(scatterRequestId, [new ScatterPartId("amet")], DoNothingCallback, completionHandler.HandleCompletion);
         completionHandler.Completed.ShouldBeTrue();
     }
 
     private class CompletionHandler
     {
         public bool Completed { get; private set; }
-        public string Context { get; private set; }
-
-        public CompletionHandler()
-        {
-            Completed = false;
-            Context = "";
-        }
+        public string Context { get; private set; } = "";
 
         public Task HandleCompletion(string context)
         {
