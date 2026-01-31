@@ -9,7 +9,6 @@
 		<Company>Salvo Isaja</Company>
 		<Copyright>Copyright 2023-2026  Salvatore Isaja</Copyright>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
-		<PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageProjectUrl>https://github.com/salvois/ScatterGather</PackageProjectUrl>
 		<Description>.NET library to implement the scatter-gather pattern using Amazon DynamoDB to store distributed progress state</Description>
@@ -17,7 +16,7 @@
 
 	<ItemGroup>
 		<None Include="../README.md" Pack="true" PackagePath="$(PackageReadmeFile)" />
-		<None Include="../LICENSE.txt" Pack="true" PackagePath="$(PackageLicenseFile)" />
+		<None Include="../LICENSE.txt" Pack="true" PackagePath="" />
 	</ItemGroup>
 
 	<ItemGroup>
